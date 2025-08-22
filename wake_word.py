@@ -1,16 +1,30 @@
 import pvporcupine
-import pyaudio, struct
+import pyaudio
+import struct
+from config import PICOVOICE_ACCESS_KEY, WAKEWORD_FILE
 
-def listen_for_wake_word():
-    porcupine = pvporcupine.create(keywords=["hej Jola"])  # placeholder, later "Hej Ora"
-    pa = pyaudio.PyAudio()
-    stream = pa.open(format=pyaudio.paInt16, channels=1,
-                     rate=porcupine.sample_rate, input=True,
-                     frames_per_buffer=porcupine.frame_length)
+class WakeWordDetector:
+    def __init__(self):
+        self.porcupine = pvporcupine.create(
+            access_key=PICOVOICE_ACCESS_KEY,
+            keyword_paths=[WAKEWORD_FILE]
+        )
+        self.pa = pyaudio.PyAudio()
+        self.audio_stream = self.pa.open(
+            rate=self.porcupine.sample_rate,
+            channels=1,
+            format=pyaudio.paInt16,
+            input=True,
+            frames_per_buffer=self.porcupine.frame_length
+        )
 
-    while True:
-        pcm = stream.read(porcupine.frame_length)
-        pcm = struct.unpack_from("h" * porcupine.frame_length, pcm)
-        result = porcupine.process(pcm)
-        if result >= 0:
-            return True
+    def listen(self):
+        pcm = self.audio_stream.read(self.porcupine.frame_length, exception_on_overflow=False)
+        pcm_unpacked = struct.unpack_from("h" * self.porcupine.frame_length, pcm)
+        keyword_index = self.porcupine.process(pcm_unpacked)
+        return keyword_index >= 0
+
+    def close(self):
+        self.audio_stream.close()
+        self.pa.terminate()
+        self.porcupine.delete()
